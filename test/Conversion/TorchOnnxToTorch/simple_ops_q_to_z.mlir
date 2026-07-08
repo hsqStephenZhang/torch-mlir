@@ -3700,6 +3700,48 @@ func.func @test_unique_sorted_with_negative_axis(%arg0: !torch.vtensor<[3,3],f32
 
 // -----
 
+// Regression test: ONNX Unique allows fewer than four outputs.
+// The lowering must not blindly index resultTypes[1..3] when they are absent.
+
+// CHECK-LABEL: func.func @test_unique_one_output
+// CHECK-SAME:    %[[ARG0:.+]]: !torch.vtensor<[7],f32>
+// CHECK:         %[[INT0:.+]] = torch.constant.int 0
+// CHECK:         %[[NEG1:.+]] = torch.constant.int -1
+// CHECK:         %[[FLAT:.+]] = torch.aten.flatten.using_ints %[[ARG0]], %[[INT0]], %[[NEG1]]
+// CHECK:         %[[Y:.+]], %{{.+}}, %{{.+}} = torch.aten.unique_dim %[[FLAT]]
+// CHECK-NOT:     torch.aten.scatter.src
+// CHECK:         return %[[Y]] : !torch.vtensor<[?],f32>
+func.func @test_unique_one_output(%arg0: !torch.vtensor<[7],f32>) -> !torch.vtensor<[?],f32> attributes {torch.onnx_meta.ir_version = 6 : si64, torch.onnx_meta.opset_version = 11 : si64, torch.onnx_meta.producer_name = "backend-test", torch.onnx_meta.producer_version = ""} {
+  %0 = torch.operator "onnx.Unique"(%arg0) {torch.onnx.sorted = 1 : si64} : (!torch.vtensor<[7],f32>) -> !torch.vtensor<[?],f32>
+  return %0 : !torch.vtensor<[?],f32>
+}
+
+// -----
+
+// CHECK-LABEL: func.func @test_unique_two_outputs
+// CHECK:         %[[Y:.+]], %[[INV:.+]], %{{.+}} = torch.aten.unique_dim
+// CHECK:         %[[SCATTER:.+]] = torch.aten.scatter.src
+// CHECK:         return %[[Y]], %[[SCATTER]]
+// CHECK-SAME:      !torch.vtensor<[?],f32>, !torch.vtensor<[?],si64>
+func.func @test_unique_two_outputs(%arg0: !torch.vtensor<[7],f32>) -> (!torch.vtensor<[?],f32>, !torch.vtensor<[?],si64>) attributes {torch.onnx_meta.ir_version = 6 : si64, torch.onnx_meta.opset_version = 11 : si64, torch.onnx_meta.producer_name = "backend-test", torch.onnx_meta.producer_version = ""} {
+  %0:2 = torch.operator "onnx.Unique"(%arg0) {torch.onnx.sorted = 1 : si64} : (!torch.vtensor<[7],f32>) -> (!torch.vtensor<[?],f32>, !torch.vtensor<[?],si64>)
+  return %0#0, %0#1 : !torch.vtensor<[?],f32>, !torch.vtensor<[?],si64>
+}
+
+// -----
+
+// CHECK-LABEL: func.func @test_unique_three_outputs
+// CHECK:         %[[Y:.+]], %[[INV:.+]], %{{.+}} = torch.aten.unique_dim
+// CHECK:         %[[SCATTER:.+]] = torch.aten.scatter.src
+// CHECK:         return %[[Y]], %[[SCATTER]], %[[INV]]
+// CHECK-SAME:      !torch.vtensor<[?],f32>, !torch.vtensor<[?],si64>, !torch.vtensor<[7],si64>
+func.func @test_unique_three_outputs(%arg0: !torch.vtensor<[7],f32>) -> (!torch.vtensor<[?],f32>, !torch.vtensor<[?],si64>, !torch.vtensor<[7],si64>) attributes {torch.onnx_meta.ir_version = 6 : si64, torch.onnx_meta.opset_version = 11 : si64, torch.onnx_meta.producer_name = "backend-test", torch.onnx_meta.producer_version = ""} {
+  %0:3 = torch.operator "onnx.Unique"(%arg0) {torch.onnx.sorted = 1 : si64} : (!torch.vtensor<[7],f32>) -> (!torch.vtensor<[?],f32>, !torch.vtensor<[?],si64>, !torch.vtensor<[7],si64>)
+  return %0#0, %0#1, %0#2 : !torch.vtensor<[?],f32>, !torch.vtensor<[?],si64>, !torch.vtensor<[7],si64>
+}
+
+// -----
+
 // CHECK-LABEL:   func.func @test_scan_sum(
 // CHECK-SAME:                             %[[VAL_0:.*]]: !torch.vtensor<[2],f32>,
 // CHECK-SAME:                             %[[VAL_1:.*]]: !torch.vtensor<[3,2],f32>) -> (!torch.vtensor<[2],f32>, !torch.vtensor<[3,2],f32>) attributes {torch.onnx_meta.ir_version = 4 : si64, torch.onnx_meta.opset_version = 17 : si64, torch.onnx_meta.producer_name = "backend-test", torch.onnx_meta.producer_version = ""} {
